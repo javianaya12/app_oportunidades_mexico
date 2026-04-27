@@ -40,6 +40,21 @@ def calculate_competition_by_zone(businesses: pd.DataFrame, zones: pd.DataFrame,
 def calculate_opportunity_score(zones_with_competition: pd.DataFrame) -> pd.DataFrame:
     """Score: high population + low competition + income index = high opportunity."""
     df = zones_with_competition.copy()
+
+    # If filters return no valid zones, keep the expected columns and avoid pandas apply errors.
+    if df.empty:
+        for col in [
+            "population_norm",
+            "competition_norm",
+            "income_norm",
+            "opportunity_score",
+            "opportunity_level",
+            "recommendation",
+        ]:
+            if col not in df.columns:
+                df[col] = pd.Series(dtype="object")
+        return df
+
     df["population_norm"] = minmax(df["population"])
     df["competition_norm"] = minmax(df["competition_count"])
 
@@ -63,7 +78,10 @@ def calculate_opportunity_score(zones_with_competition: pd.DataFrame) -> pd.Data
     ]
     labels = ["Alta", "Media", "Baja"]
     df["opportunity_level"] = np.select(conditions, labels, default="Baja")
-    df["recommendation"] = df.apply(build_recommendation, axis=1)
+
+    # df.apply(axis=1) can return a DataFrame in edge cases with empty or malformed data.
+    # Building the list explicitly keeps the assignment safe.
+    df["recommendation"] = [build_recommendation(row) for _, row in df.iterrows()]
     return df.sort_values("opportunity_score", ascending=False).reset_index(drop=True)
 
 
