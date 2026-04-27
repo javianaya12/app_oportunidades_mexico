@@ -20,6 +20,7 @@ from src.export_utils import to_excel_bytes, to_pdf_bytes
 from src.map_utils import build_opportunity_map
 from src.sample_data import create_sample_files
 from src.scoring import calculate_competition_by_zone, calculate_opportunity_score
+from src.report_utils import generate_opportunity_report
 
 st.set_page_config(page_title="Mapa de Oportunidades México", page_icon="🗺️", layout="wide")
 
@@ -137,6 +138,22 @@ with right:
         file_name="reporte_oportunidades_mexico.pdf",
         mime="application/pdf",
     )
+
+st.divider()
+report_markdown = generate_opportunity_report(
+    scored_zones=scored_zones,
+    selected_business_type=selected_type,
+    selected_city=selected_city,
+    radius_km=radius_km,
+    visible_businesses_count=len(filtered_businesses),
+)
+st.markdown(report_markdown)
+st.download_button(
+    "Descargar reporte de hallazgos TXT",
+    data=report_markdown.encode("utf-8"),
+    file_name="hallazgos_recomendaciones.txt",
+    mime="text/plain",
+)
 
 st.divider()
 st.subheader("Cómo interpretar el score")
