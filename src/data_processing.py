@@ -13,13 +13,28 @@ REQUIRED_BUSINESS_COLUMNS = {"business_type", "city", "latitude", "longitude"}
 REQUIRED_ZONE_COLUMNS = {"zone_id", "zone_name", "city", "latitude", "longitude", "population"}
 
 COLUMN_ALIASES = {
-    "lat": "latitude", "latitud": "latitude",
-    "lon": "longitude", "lng": "longitude", "longitud": "longitude",
+    # Coordenadas
+    "lat": "latitude", "latitud": "latitude", "latitud_geo": "latitude",
+    "lon": "longitude", "lng": "longitude", "longitud": "longitude", "longitud_geo": "longitude",
+
+    # Tipo/giro de negocio
     "tipo": "business_type", "giro": "business_type", "actividad": "business_type",
-    "ciudad": "city", "municipio": "city",
+    "nombre_act": "business_type", "clase_actividad": "business_type",
+
+    # Ciudad / ubicación
+    "ciudad": "city", "municipio": "city", "nomb_mun": "city", "localidad": "locality",
+    "entidad": "state", "nom_ent": "state",
+
+    # Población / zonas
     "poblacion": "population", "población": "population",
-    "nombre": "business_name", "razon_social": "business_name", "razón_social": "business_name",
-    "direccion": "address", "dirección": "address",
+
+    # Nombre del negocio
+    "nombre": "business_name", "nom_estab": "business_name",
+    "razon_social": "business_name", "razón_social": "business_name", "raz_social": "business_name",
+
+    # Dirección
+    "direccion": "address", "dirección": "address", "domicilio": "address",
+    "nom_vial": "street", "numero_ext": "external_number", "colonia": "neighborhood",
 }
 
 BUSINESS_KEYWORDS = {
@@ -32,17 +47,57 @@ BUSINESS_KEYWORDS = {
 
 
 def load_dataset(uploaded_file, expected_sheet: str | None = None) -> pd.DataFrame:
-    name = getattr(uploaded_file, "name", "")
-    if name.lower().endswith(".csv"):
-        return pd.read_csv(uploaded_file)
-    if name.lower().endswith((".xlsx", ".xls")):
+    """
+    Carga archivos CSV o Excel.
+
+    INEGI/DENUE normalmente no viene en UTF-8; por eso intentamos varias
+    codificaciones comunes en México. También usamos sep=None para que pandas
+    detecte si el archivo viene separado por coma, punto y coma o tabulador.
+    """
+    if uploaded_file is None:
+        return None
+
+    name = getattr(uploaded_file, "name", "").lower()
+
+    if name.endswith(".csv"):
+        encodings = ["utf-8", "utf-8-sig", "latin1", "cp1252", "iso-8859-1"]
+        last_error = None
+
+        for encoding in encodings:
+            try:
+                uploaded_file.seek(0)
+                return pd.read_csv(
+                    uploaded_file,
+                    encoding=encoding,
+                    sep=None,
+                    engine="python",
+                    on_bad_lines="skip",
+                )
+            except Exception as exc:
+                last_error = exc
+
+        raise ValueError(
+            "No se pudo leer el CSV. Intenta guardarlo como CSV UTF-8 o revisa el archivo original."
+        ) from last_error
+
+    if name.endswith((".xlsx", ".xls")):
+        uploaded_file.seek(0)
         return pd.read_excel(uploaded_file, sheet_name=expected_sheet or 0)
+
     raise ValueError("Formato no soportado. Usa CSV, XLSX o XLS.")
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     clean = df.copy()
-    clean.columns = [str(c).strip().lower().replace(" ", "_") for c in clean.columns]
+    clean.columns = [
+        str(c)
+        .strip()
+        .replace("\ufeff", "")
+        .lower()
+        .replace(" ", "_")
+        .replace("-", "_")
+        for c in clean.columns
+    ]
     clean = clean.rename(columns={c: COLUMN_ALIASES.get(c, c) for c in clean.columns})
     return clean
 
